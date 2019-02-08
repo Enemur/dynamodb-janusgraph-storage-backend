@@ -25,17 +25,15 @@ services:
       retries: 20
     ports:
       - "8182:8182"
-    depends_on:
-      dynamodb-local:
-        condition: service_healthy
-    command: ["/var/jg/bin/gremlin-server.sh", "./conf/gremlin-server/gremlin-server-local-docker.yaml"]
-  dynamodb-local:
-    image: awslabs/dynamodblocal:latest
-    container_name: dynamodb_local
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/shell/ || exit 1"]
-      interval: 1s
-      timeout: 10s
-      retries: 3
-    ports:
-      - "8000:8000"
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=AKIAJKMOQQ7OM4FRA2OQ
+      - AWS_SECRET_KEY=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
+      - TABLES_PREFIX=jg
+      - TABLE_EDGESTORE_NAME=edgestore
+      - TABLE_INDEXSTORE_NAME=graphindex
+      - TABLE_SYSTEM_TX_LOG_NAME=txlog
+      - TABLE_SYSTEM_MGMT_LOG_NAME=systemlog
+      - TABLE_SYSTEM_PROPERTIES_STORE_NAME=sys
+      - TABLE_IDS_STORE_NAME=janusgraph_ids
+    command: ["/var/jg/bin/gremlin-server.sh", "./conf/gremlin-server/gremlin-server.yaml"]

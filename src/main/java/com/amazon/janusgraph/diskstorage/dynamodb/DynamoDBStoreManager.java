@@ -171,7 +171,7 @@ public class DynamoDBStoreManager extends DistributedStoreManager implements Key
     @Override
     public void mutateMany(final Map<String, Map<StaticBuffer, KCVMutation>> mutations, final StoreTransaction txh) throws BackendException {
         //this method can be called by janusgraph-core, which is not aware of our backend implementation.
-        //that means the keys of mutations map are the logical store names.
+        //that means the keys of mutaStions map are the logical store names.
         final Timer.Context ctxt = client.getDelegate().getTimerContext(this.prefixAndMutateMany, null /*tableName*/);
         try {
             final DynamoDbStoreTransaction tx = DynamoDbStoreTransaction.getTx(txh);

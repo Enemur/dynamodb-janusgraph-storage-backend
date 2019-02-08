@@ -120,6 +120,7 @@ public abstract class AbstractDynamoDbStore implements AwsStore {
         this.manager = manager;
         this.client = this.manager.getClient();
         this.name = storeName;
+        log.info("storeName: {}, prefix: {}, ", storeName, prefix);
         this.tableName = prefix + "_" + storeName;
         this.forceConsistentRead = client.isForceConsistentRead();
 
@@ -145,6 +146,13 @@ public abstract class AbstractDynamoDbStore implements AwsStore {
     public final void ensureStore() throws BackendException {
         log.debug("Entering ensureStore table:{}", tableName);
         client.getDelegate().createTableAndWaitForActive(getTableSchema());
+    }
+
+
+    @Override
+    public boolean tableIsExist() throws BackendException {
+        log.debug("Get existing of table:{}", tableName);
+        return client.getDelegate().tableIsExist(tableName);
     }
 
     @Override

@@ -27,6 +27,7 @@ import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
 import org.janusgraph.diskstorage.configuration.Configuration;
 import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration;
 
@@ -39,6 +40,8 @@ import com.google.common.base.Strings;
 import com.google.common.util.concurrent.RateLimiter;
 import com.google.common.util.concurrent.RateLimiterCreator;
 
+import org.janusgraph.diskstorage.Backend;
+
 /**
  * Operations setting up the DynamoDB client.
  *
@@ -46,6 +49,7 @@ import com.google.common.util.concurrent.RateLimiterCreator;
  * @author Alexander Patrikalakis
  *
  */
+@Slf4j
 public class Client {
     private static final String VALIDATE_CREDENTIALS_CLASS_NAME = "Must provide either an AWSCredentials or AWSCredentialsProvider fully qualified class name";
     private static final double DEFAULT_BURST_BUCKET_SIZE_IN_SECONDS = 300.0;
@@ -64,7 +68,19 @@ public class Client {
     @Getter
     private final String prefix;
 
+    @Getter
+    private final Map<String, String> baseNameToActualName = new HashMap<>();
+
     public Client(final Configuration config) {
+        prefix = System.getenv("TABLES_PREFIX");
+
+        baseNameToActualName.put(Backend.EDGESTORE_NAME, System.getenv("TABLE_EDGESTORE_NAME"));
+        baseNameToActualName.put(Backend.INDEXSTORE_NAME, System.getenv("TABLE_INDEXSTORE_NAME"));
+        baseNameToActualName.put(Backend.SYSTEM_TX_LOG_NAME, System.getenv("TABLE_SYSTEM_TX_LOG_NAME"));
+        baseNameToActualName.put(Backend.SYSTEM_MGMT_LOG_NAME, System.getenv("TABLE_SYSTEM_MGMT_LOG_NAME"));
+        baseNameToActualName.put(GraphDatabaseConfiguration.SYSTEM_PROPERTIES_STORE_NAME, System.getenv("TABLE_SYSTEM_PROPERTIES_STORE_NAME"));
+        baseNameToActualName.put(config.get(GraphDatabaseConfiguration.IDS_STORE_NAME), System.getenv("TABLE_IDS_STORE_NAME"));
+
         final String credentialsClassName = config.get(Constants.DYNAMODB_CREDENTIALS_CLASS_NAME);
         final Class<?> clazz;
         try {
@@ -115,7 +131,7 @@ public class Client {
 //end adaptation of constructor at
 //https://github.com/buka/titan/blob/master/src/main/java/com/thinkaurelius/titan/diskstorage/dynamodb/DynamoDBClient.java#L77
         enableParallelScan = config.get(Constants.DYNAMODB_ENABLE_PARALLEL_SCAN);
-        prefix = config.get(Constants.DYNAMODB_TABLE_PREFIX);
+
         final String metricsPrefix = config.get(Constants.DYNAMODB_METRICS_PREFIX);
 
         final long maxRetries = config.get(Constants.DYNAMODB_MAX_SELF_THROTTLED_RETRIES);
@@ -136,12 +152,15 @@ public class Client {
         final Map<String, RateLimiter> writeRateLimit = new HashMap<>();
 
         final Set<String> storeNames = new HashSet<>(Constants.REQUIRED_BACKEND_STORES);
+
         storeNames.add(config.get(GraphDatabaseConfiguration.IDS_STORE_NAME));
         storeNames.addAll(config.getContainedNamespaces(Constants.DYNAMODB_STORES_NAMESPACE));
-        storeNames.forEach(storeName -> setupStore(config, readRateLimit, writeRateLimit, storeName));
 
-        delegate = new DynamoDbDelegate(JanusGraphConfigUtil.getNullableConfigValue(config, Constants.DYNAMODB_CLIENT_ENDPOINT),
-                JanusGraphConfigUtil.getNullableConfigValue(config, Constants.DYNAMODB_CLIENT_SIGNING_REGION),
+        storeNames.forEach((storeName) -> setupStore(config, readRateLimit, writeRateLimit, storeName));
+
+        final String region = System.getenv("AWS_REGION");
+
+        delegate = new DynamoDbDelegate(null, region,
                 credentialsProvider,
             clientConfig, config, readRateLimit, writeRateLimit, maxRetries, retryMillis, prefix, metricsPrefix, controlPlaneRateLimiter);
     }
@@ -156,9 +175,15 @@ public class Client {
         final double readRate = config.get(Constants.STORES_READ_RATE_LIMIT, store);
         final double writeRate = config.get(Constants.STORES_WRITE_RATE_LIMIT, store);
 
-        final String actualTableName = prefix + "_" + store;
+        final String name = getBaseNameToActualName().get(store);
+        if (name == null) {
+            log.error("Name of table:{} didn't specify", store);
+            getDelegate().shutdown();
+        }
 
-        this.dataModelMap.put(store, BackendDataModel.valueOf(dataModel));
+        final String actualTableName = prefix + "_" + name;
+
+        this.dataModelMap.put(name, BackendDataModel.valueOf(dataModel));
         this.capacityRead.put(actualTableName, readCapacity);
         this.capacityWrite.put(actualTableName, writeCapacity);
         readRateLimit.put(actualTableName, RateLimiterCreator.createBurstingLimiter(readRate, DEFAULT_BURST_BUCKET_SIZE_IN_SECONDS));

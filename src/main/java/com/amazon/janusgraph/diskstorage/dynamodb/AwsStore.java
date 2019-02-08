@@ -46,6 +46,13 @@ public interface AwsStore extends KeyColumnValueStore {
     void deleteStore() throws BackendException;
 
     /**
+     * Сhecks the existence of a table.
+     * @return table is exist
+     * @throws BackendException
+     */
+    boolean tableIsExist() throws BackendException;
+
+    /**
      * Titan relies on static store names to be used, but we want the ability to
      * have multiple graphs in a single region, so prepend a configurable prefix to the
      * underlying table names of each graph and get the DynamoDB table name with this method

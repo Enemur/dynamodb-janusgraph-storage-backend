@@ -660,6 +660,14 @@ public class DynamoDbDelegate  {
         return worker.getMergedPages();
     }
 
+    public boolean tableIsExist(final String tableName) throws BackendException {
+        log.info("Go to Get existing of table:{}", tableName);
+        final TableDescription desc = this.describeTable(tableName);
+        final boolean result = null != desc;
+        log.info("Get existing of table:{}, result: {}", tableName, result);
+        return result;
+    }
+
     private TableDescription describeTable(final String tableName) throws BackendException {
         return describeTable(new DescribeTableRequest().withTableName(tableName)).getTable();
     }

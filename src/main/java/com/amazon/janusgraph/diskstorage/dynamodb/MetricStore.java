@@ -44,6 +44,11 @@ public class MetricStore extends MetricInstrumentedStore implements AwsStore {
     }
 
     @Override
+    public boolean tableIsExist() throws BackendException {
+        return delegate.tableIsExist();
+    }
+
+    @Override
     public void ensureStore() throws BackendException {
         delegate.ensureStore();
     }

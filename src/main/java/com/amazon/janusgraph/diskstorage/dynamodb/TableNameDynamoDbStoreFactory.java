@@ -35,27 +35,46 @@ public class TableNameDynamoDbStoreFactory implements DynamoDbStoreFactory {
 
     @Override
     public AwsStore create(final DynamoDBStoreManager manager, final String prefix, final String name) throws BackendException {
-        log.debug("Entering TableNameDynamoDbStoreFactory.create prefix:{} name:{}", prefix, name);
+        final Client client = manager.getClient();
+
+        String actualName = client.getBaseNameToActualName().get(name);
+        if (actualName == null) {
+            actualName = name;
+        }
+        log.info("Entering TableNameDynamoDbStoreFactory.create prefix:{} actualName:{}, baseName:{}", prefix, actualName, name);
         // ensure there is only one instance used per table name.
 
-        final Client client = manager.getClient();
-        final BackendDataModel model = client.dataModel(name);
+        final BackendDataModel model = client.dataModel(actualName);
+
         if (model == null) {
-            throw new PermanentBackendException(String.format("Store name %s unknown. Set up user log / lock store in properties", name));
+            throw new PermanentBackendException(String.format("Store name %s unknown. Set up user log / lock store in properties", actualName));
         }
-        final AwsStore storeBackend = model.createStoreBackend(manager, prefix, name);
+
+        final AwsStore storeBackend = model.createStoreBackend(manager, prefix, actualName);
         final AwsStore create = new MetricStore(storeBackend);
-        final AwsStore previous = stores.putIfAbsent(name, create);
+        final AwsStore previous = stores.putIfAbsent(actualName, create);
         if (null == previous) {
             try {
-                create.ensureStore();
+                final boolean tableIsExist = create.tableIsExist();
+                if (!tableIsExist) {
+                    log.error("prefix:{} actualName:{}, baseName:{}; Table have not created", prefix, actualName, name);
+                    client.getDelegate().shutdown();
+                    throw new BackendRuntimeException(String.format("prefix:%s actualName:%s, baseName:%s; Table have not created", prefix, actualName, name));
+                }
             } catch (BackendException e) {
+                log.error("error getting describeTable: actualName: {}", actualName);
                 client.getDelegate().shutdown();
                 throw e;
             }
+//            try {
+//                create.ensureStore();
+//            } catch (BackendException e) {
+//                client.getDelegate().shutdown();
+//                throw e;
+//            }
         }
-        final AwsStore store = stores.get(name);
-        log.debug("Exiting TableNameDynamoDbStoreFactory.create prefix:{} name:{} returning:{}", prefix, name, store);
+        final AwsStore store = stores.get(actualName);
+        log.info("Exiting TableNameDynamoDbStoreFactory.create prefix:{} name:{} returning:{}", prefix, actualName, store);
         return store;
     }
 
